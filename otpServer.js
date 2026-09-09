@@ -35,7 +35,7 @@ app.use((req, res, next) => {
 const otpStore = new Map();
 
 // ── Resend Client ──────────────────────────────────────────────────────────
-const resend = new Resend('re_Vy16GhzQ_KPco48CYSjykRePjCDovFpS4');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Helper: generate a 6-digit OTP ──────────────────────────────────────────
 function generateOtp() {
