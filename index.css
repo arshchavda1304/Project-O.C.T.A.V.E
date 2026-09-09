@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  
+  body {
+    background-color: #FAF8F5;
+    color: #0F172A;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* High contrast focus rings for WCAG AA compliance */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 4px solid #166534 !important;
+    outline-offset: 3px !important;
+  }
+}
+
+/* Scalable font adjustments for elderly accessibility */
+.text-scale-normal {
+  font-size: 16px;
+}
+
+.text-scale-large {
+  font-size: 19px;
+}
+
+.text-scale-extralarge {
+  font-size: 22px;
+}
+
+/* =============================================
+   QUICK REACTION TEST — Dynamic Answer Animations
+   ============================================= */
+
+/* Keyframe Definitions (must be global, outside @layer) */
+@keyframes correctBounce {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(21, 128, 61, 0.7);
+  }
+  25% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 16px rgba(21, 128, 61, 0.4);
+  }
+  45% {
+    transform: scale(0.97);
+    box-shadow: 0 0 0 26px rgba(21, 128, 61, 0.2);
+  }
+  65% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 34px rgba(21, 128, 61, 0);
+  }
+  85% {
+    transform: scale(0.99);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(21, 128, 61, 0);
+  }
+}
+
+@keyframes wrongShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-16px) rotate(-1.5deg);
+  }
+  30% {
+    transform: translateX(14px) rotate(1.5deg);
+  }
+  45% {
+    transform: translateX(-12px) rotate(-1deg);
+  }
+  60% {
+    transform: translateX(10px) rotate(1deg);
+  }
+  75% {
+    transform: translateX(-5px) rotate(-0.5deg);
+  }
+  90% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes guidePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    transform: scale(1.025);
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0.2);
+  }
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(12px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.05) translateY(-3px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes encourageWobble {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0) scale(1.03);
+  }
+  65% {
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes floatSparkle {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-20px) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.8);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -----------------------------------------------
+   Utility classes registered in @layer utilities
+   so Tailwind v4 includes them in the final bundle
+   ----------------------------------------------- */
+@layer utilities {
+  .animate-correct-bounce {
+    animation: correctBounce 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-correct-pulse {
+    animation: correctBounce 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-wrong-shake {
+    animation: wrongShake 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  }
+
+  .animate-guide-pulse {
+    animation: guidePulse 1.8s ease-in-out infinite;
+  }
+
+  .animate-pop-in {
+    animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-encourage-wobble {
+    animation: encourageWobble 0.55s ease-out both;
+  }
+
+  .animate-float-sparkle {
+    animation: floatSparkle 1.4s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.35s ease-out both;
+  }
+}
+

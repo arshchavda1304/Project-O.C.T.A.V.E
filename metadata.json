@@ -1,0 +1,7 @@
+﻿{
+  "name": "Project O.C.T.A.V.E. - Unified Healthcare Portal",
+  "description": "Accessible, high-contrast dementia care and cognitive support platform for elderly users in India's North Eastern Region, featuring offline persistence, multilingual audio guidance, and specialized caregiver and clinical tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
