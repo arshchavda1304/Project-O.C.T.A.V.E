@@ -49,7 +49,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const otpServerUrl =
     (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_OTP_SERVER_URL) ||
-    'http://localhost:4001';
+    'https://o-c-t-a-v-e-otp-backend.onrender.com';
 
   // Cooldown countdown timer for OTP resend
   useEffect(() => {
@@ -219,25 +219,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   return (
     <div className="min-h-screen w-full bg-[#E5E7EB] flex items-center justify-center p-4 sm:p-8 font-sans">
       <div className="w-full max-w-6xl bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col lg:flex-row min-h-[700px]">
-        
+
         {/* ---------------------------------------------------------
             LEFT PANEL: Branding & Visuals
             --------------------------------------------------------- */}
         <div className="lg:w-[45%] bg-[#114A31] p-10 lg:p-12 flex flex-col relative overflow-hidden">
-          
+
           {/* Top Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-[#206A4B] rounded-full text-xs font-bold text-[#34D399] w-max mb-10">
             <Activity className="w-4 h-4" />
             North East Tele-Care Network
           </div>
-          
+
           <h1 className="text-4xl lg:text-5xl font-black text-white mb-2 leading-tight">
             Project<br />O.C.T.A.V.E.
           </h1>
           <p className="text-[#34D399] text-sm font-bold tracking-wide uppercase mb-6 max-w-xs">
             Optimized Care Through Assisted Virtual Empowerment
           </p>
-          
+
           <p className="text-emerald-50/90 text-base leading-relaxed max-w-sm mb-10">
             Unified, offline-first cognitive and clinical care platform serving elders, family caregivers, and physicians across Assam, Manipur, Tripura, and Nagaland.
           </p>
@@ -273,7 +273,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             RIGHT PANEL: Authentication Flow
             --------------------------------------------------------- */}
         <div className="lg:w-[55%] p-10 lg:p-14 flex flex-col bg-white">
-          
+
           {/* Top Bar */}
           <div className="flex justify-between items-center mb-8">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -282,8 +282,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <ReadAloudButton
               id="btn-login-read"
               text={
-                stage === 'credentials' 
-                  ? "Enter your name and Gmail address. We will instantly email you a 6-digit authentication code." 
+                stage === 'credentials'
+                  ? "Enter your name and Gmail address. We will instantly email you a 6-digit authentication code."
                   : "Enter the 6-digit authentication code sent to your email."
               }
               language={language}
@@ -294,17 +294,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           {/* Error Alert */}
           {errorMessage && (
             <div className="p-4 rounded-xl bg-red-50 border border-red-300 text-red-800 text-sm flex items-start gap-3 shadow-sm mb-8">
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600" /> 
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600" />
               <div>
                 <strong className="block mb-1 text-red-900">Authentication Alert</strong>
                 {errorMessage}
               </div>
             </div>
           )}
-          
+
           {infoMessage && (
             <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-sm flex items-start gap-3 shadow-sm mb-8">
-              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600" /> 
+              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600" />
               <div>
                 <strong className="block mb-1 text-emerald-900">Success</strong>
                 {infoMessage}
