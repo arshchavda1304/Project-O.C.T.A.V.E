@@ -7,16 +7,10 @@
  * Endpoints:
  *   POST /api/send-otp     { email, name }
  *   POST /api/verify-otp   { email, otp }
- *
- * Gmail setup: create an App Password at
- *   https://myaccount.google.com/apppasswords
- * Then add to .env:
- *   SMTP_EMAIL=yourname@gmail.com
- *   SMTP_APP_PASSWORD=xxxx xxxx xxxx xxxx
  */
 
 import express from 'express';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { generateOtpEmail } from './emailTemplate.js';
@@ -38,27 +32,10 @@ app.use((req, res, next) => {
 });
 
 // ── In-memory OTP store: { email → { otp, expiresAt } } ─────────────────────
-// In production, replace with Redis or a database table.
 const otpStore = new Map();
 
-// ── Gmail Transporter ────────────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_APP_PASSWORD,
-  },
-});
-
-// Verify SMTP connection on startup
-transporter.verify((err) => {
-  if (err) {
-    console.error('❌ Gmail SMTP connection failed:', err.message);
-    console.error('   → Check SMTP_EMAIL and SMTP_APP_PASSWORD in your .env file');
-  } else {
-    console.log('✅ Gmail SMTP connected successfully');
-  }
-});
+// ── Resend Client ──────────────────────────────────────────────────────────
+const resend = new Resend('re_Vy16GhzQ_KPco48CYSjykRePjCDovFpS4');
 
 // ── Helper: generate a 6-digit OTP ──────────────────────────────────────────
 function generateOtp() {
@@ -81,19 +58,18 @@ app.post('/api/send-otp', async (req, res) => {
   otpStore.set(emailLower, { otp, expiresAt });
 
   try {
-    await transporter.sendMail({
-      from: `"Project O.C.T.A.V.E. Security" <${process.env.SMTP_EMAIL}>`,
+    const data = await resend.emails.send({
+      from: 'onboarding@resend.dev',
       to: emailLower,
       subject: `Project O.C.T.A.V.E. login code: ${otp}`,
       html: generateOtpEmail(name, otp, emailLower),
-      // Plain-text fallback (important for spam filters)
       text: `Hello ${name},\n\nYour Project O.C.T.A.V.E. verification code is: ${otp}\n\nThis code expires in 5 minutes.\n\nIf you did not request this, please ignore this email.\n\n— Project O.C.T.A.V.E. Security`,
     });
 
-    console.log(`📧 OTP sent to ${emailLower} (OTP: ${otp})`);
+    console.log(`📧 OTP sent via Resend to ${emailLower} (OTP: ${otp})`, data);
     return res.json({ success: true, message: 'OTP sent successfully.' });
   } catch (err) {
-    console.error('❌ Failed to send OTP email:', err.message);
+    console.error('❌ Failed to send OTP email via Resend:', err.message);
     return res.status(500).json({ success: false, message: 'Failed to send email. Please try again.' });
   }
 });
@@ -130,6 +106,7 @@ app.post('/api/verify-otp', (req, res) => {
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'Project O.C.T.A.V.E. OTP Server' }));
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Project O.C.T.A.V.E. OTP Server running on http://localhost:${PORT}`);
