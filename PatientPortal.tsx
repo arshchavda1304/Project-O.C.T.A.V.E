@@ -26,6 +26,9 @@ import {
   AlertTriangle,
   ShieldCheck,
   MapPin,
+  BrainCircuit,
+  Loader2,
+  Wand2,
 } from 'lucide-react';
 import { speakText, playPositiveChime, playEncourageChime } from './speech';
 import { ReadAloudButton } from './ReadAloudButton';
@@ -101,6 +104,40 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
   const [movesCount, setMovesCount] = useState(0);
   const [isGridFinished, setIsGridFinished] = useState(false);
 
+  // AI Scenario States
+  const [aiScenario, setAiScenario] = useState<{scenario: string, options: string[], correctIndex: number, safetyCategory: string} | null>(null);
+  const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
+  const [aiScenarioFeedback, setAiScenarioFeedback] = useState<string | null>(null);
+  const [selectedAiChoiceIndex, setSelectedAiChoiceIndex] = useState<number | null>(null);
+
+  // Reaction Time Tracking
+  const [scenarioStartTime, setScenarioStartTime] = useState<number>(0);
+
+  // DDA States for Home Safety
+  const [currentDifficulty, setCurrentDifficulty] = useState<number>(1);
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(0);
+  const [consecutiveMistakes, setConsecutiveMistakes] = useState<number>(0);
+
+  // Helper to submit score
+  const submitScore = async (reactionTimeMs: number, isCorrect: boolean) => {
+    try {
+      const OTP_SERVER_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OTP_SERVER_URL || 'http://127.0.0.1:4001';
+      const res = await fetch(`${OTP_SERVER_URL}/api/score/calculate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reactionTimeMs, isCorrect })
+      });
+      const data = await res.json();
+      if (data.success) {
+        console.log(`Scored: ${data.pointsAwarded} points`);
+        // We could pass points to onGameActivityCompleted here if App.tsx supported it.
+        // For now, trigger the standard completion
+      }
+    } catch (err) {
+      console.error('Failed to calculate score', err);
+    }
+  };
+
   const initGridGame = () => {
     const pairs = [...initialSymbols, ...initialSymbols].map((item, idx) => ({
       id: idx,
@@ -122,6 +159,21 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
   useEffect(() => {
     initGridGame();
   }, [language]);
+
+  useEffect(() => {
+    if (activeModule === 'situation_test' && !isGeneratingScenario) {
+      setScenarioStartTime(Date.now());
+    }
+  }, [activeModule, scenarioIndex, aiScenario, selectedRegion, isGeneratingScenario]);
+
+  // Reset DDA state when the session starts or module is switched
+  useEffect(() => {
+    if (activeModule === 'situation_test') {
+      setCurrentDifficulty(1);
+      setConsecutiveCorrect(0);
+      setConsecutiveMistakes(0);
+    }
+  }, [activeModule]);
 
   const currentPhoto = familyPhotos.length > 0
     ? (familyPhotos[photoIndex % familyPhotos.length] || familyPhotos[0])
@@ -191,8 +243,25 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
 
     setSelectedScenarioChoice(choice);
     const selectedOption = choice === 'A' ? currentScenario.optionA : currentScenario.optionB;
+    const isCorrect = !!selectedOption.isCorrect;
+    const reactionTimeMs = Date.now() - scenarioStartTime;
 
-    if (selectedOption.isCorrect) {
+    submitScore(reactionTimeMs, isCorrect);
+
+    if (isCorrect) {
+      // DDA Promotion Logic
+      const newConsecutiveCorrect = consecutiveCorrect + 1;
+      setConsecutiveCorrect(newConsecutiveCorrect);
+      setConsecutiveMistakes(0);
+
+      if (currentDifficulty === 1 && newConsecutiveCorrect >= 3) {
+        setCurrentDifficulty(2);
+        setConsecutiveCorrect(0);
+      } else if (currentDifficulty === 2 && newConsecutiveCorrect >= 3) {
+        setCurrentDifficulty(3);
+        setConsecutiveCorrect(0);
+      }
+
       playPositiveChime();
       setShowCelebration(true);
       setShowEncouragement(false);
@@ -203,6 +272,16 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
         setShowCelebration(false);
       }, 2800);
     } else {
+      // DDA Demotion Logic
+      const newConsecutiveMistakes = consecutiveMistakes + 1;
+      setConsecutiveMistakes(newConsecutiveMistakes);
+      setConsecutiveCorrect(0);
+
+      if (newConsecutiveMistakes >= 2) {
+        setCurrentDifficulty((prev) => Math.max(1, prev - 1));
+        setConsecutiveMistakes(0);
+      }
+
       playEncourageChime();
       setShowCelebration(false);
       setShowEncouragement(true);
@@ -218,11 +297,106 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
   };
 
   const handleNextScenario = () => {
+    if (aiScenario) {
+      setAiScenario(null);
+      setSelectedAiChoiceIndex(null);
+      setAiScenarioFeedback(null);
+    }
     setSelectedScenarioChoice(null);
     setScenarioFeedback(null);
     setShowCelebration(false);
     setShowEncouragement(false);
     setScenarioIndex((prev) => (prev + 1) % regionalScenarios.length);
+  };
+
+  const generateNewScenario = async () => {
+    setIsGeneratingScenario(true);
+    setAiScenario(null);
+    setSelectedAiChoiceIndex(null);
+    setAiScenarioFeedback(null);
+    setShowCelebration(false);
+    setShowEncouragement(false);
+    setSelectedScenarioChoice(null);
+
+    try {
+      const OTP_SERVER_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OTP_SERVER_URL || 'http://127.0.0.1:4001';
+      
+      const langMap: Record<string, string> = { as: 'Assamese', nag: 'Nagamese', mni: 'Manipuri', trp: 'Kokborok', en: 'English' };
+      const reqLanguage = langMap[language] || 'English';
+
+      const response = await fetch(`${OTP_SERVER_URL}/api/ai/generate-scenario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferredLanguage: reqLanguage, difficultyLevel: currentDifficulty })
+      });
+      const data = await response.json();
+      if (data.success && data.data) {
+        setAiScenario(data.data);
+      } else {
+        console.error("AI Generation failed", data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingScenario(false);
+    }
+  };
+
+  const handleAiChoiceSituation = (index: number) => {
+    if (selectedAiChoiceIndex !== null || !aiScenario) return;
+
+    setSelectedAiChoiceIndex(index);
+    const isCorrect = index === aiScenario.correctIndex;
+    const reactionTimeMs = Date.now() - scenarioStartTime;
+
+    submitScore(reactionTimeMs, isCorrect);
+
+    if (isCorrect) {
+      // DDA Promotion Logic
+      const newConsecutiveCorrect = consecutiveCorrect + 1;
+      setConsecutiveCorrect(newConsecutiveCorrect);
+      setConsecutiveMistakes(0);
+
+      if (currentDifficulty === 1 && newConsecutiveCorrect >= 3) {
+        setCurrentDifficulty(2);
+        setConsecutiveCorrect(0);
+      } else if (currentDifficulty === 2 && newConsecutiveCorrect >= 3) {
+        setCurrentDifficulty(3);
+        setConsecutiveCorrect(0);
+      }
+
+      playPositiveChime();
+      setShowCelebration(true);
+      setShowEncouragement(false);
+      setAiScenarioFeedback(t.situationCorrectFeedback || '✓ Excellent choice! Safe & healthy decision.');
+      speakText(t.situationCorrectFeedback || 'Excellent choice!', language);
+
+      setTimeout(() => {
+        setShowCelebration(false);
+      }, 2800);
+    } else {
+      // DDA Demotion Logic
+      const newConsecutiveMistakes = consecutiveMistakes + 1;
+      setConsecutiveMistakes(newConsecutiveMistakes);
+      setConsecutiveCorrect(0);
+
+      if (newConsecutiveMistakes >= 2) {
+        setCurrentDifficulty((prev) => Math.max(1, prev - 1));
+        setConsecutiveMistakes(0);
+      }
+
+      playEncourageChime();
+      setShowCelebration(false);
+      setShowEncouragement(true);
+      setAiScenarioFeedback(t.situationEncourageFeedback || 'Take your time! Let\'s choose the safer step.');
+      speakText(t.situationEncourageFeedback || 'Take your time!', language);
+
+      setTimeout(() => {
+        setShowEncouragement(false);
+      }, 2800);
+    }
+
+    onGameActivityCompleted?.('situation_test');
   };
 
   // Helper for dynamic Lucide icon rendering
@@ -239,6 +413,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
       case 'DoorClosed': return <DoorClosed className={className} />;
       case 'AlertTriangle': return <AlertTriangle className={className} />;
       case 'ShieldCheck': return <ShieldCheck className={className} />;
+      case 'BrainCircuit': return <BrainCircuit className={className} />;
       default: return <KeyRound className={className} />;
     }
   };
@@ -385,14 +560,19 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
               onClick={async () => {
                 const OTP_SERVER_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OTP_SERVER_URL || 'http://127.0.0.1:4001';
                 try {
-                  await fetch(`${OTP_SERVER_URL}/api/wander-guard/sos`, {
+                  const res = await fetch(`${OTP_SERVER_URL}/api/wander-guard/sos`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ currentLat: 0, currentLng: 0, timestamp: Date.now() })
                   });
-                  alert('Demo SOS Email Sent Successfully!');
+                  const data = await res.json();
+                  if (data.success) {
+                    alert('Demo SOS Email Sent Successfully!');
+                  } else {
+                    alert('Server rejected the email: ' + data.message);
+                  }
                 } catch (err) {
-                  alert('Failed to send Demo SOS');
+                  alert('Network connection failed');
                 }
               }}
               className="mt-4 px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl border-2 border-red-200 text-sm hover:bg-red-200 active:scale-95 transition-all flex items-center gap-2"
@@ -647,20 +827,39 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
             </div>
           </div>
 
+          <div className="flex justify-center items-center gap-4 mb-4">
+            <button 
+              onClick={generateNewScenario}
+              disabled={isGeneratingScenario}
+              className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-white transition-all shadow-md transform hover:scale-105 active:scale-95 ${
+                isGeneratingScenario ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:shadow-lg'
+              }`}
+            >
+              <Wand2 className={`w-5 h-5 ${isGeneratingScenario ? 'animate-spin' : ''}`} />
+              {isGeneratingScenario ? 'Generating...' : 'Generate AI Scenario ✨'}
+            </button>
+            <div className="bg-white border-2 border-indigo-100 px-4 py-2 rounded-full font-bold text-indigo-700 flex items-center gap-2 shadow-sm">
+              <span className="text-xl">
+                {currentDifficulty === 1 ? '🟢' : currentDifficulty === 2 ? '🟡' : '🔴'}
+              </span>
+              Level {currentDifficulty}
+            </div>
+          </div>
+
           {/* Prompt Card */}
-          <div className="bg-amber-50 rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 mb-10 text-center max-w-4xl mx-auto shadow-sm">
+          <div className="bg-amber-50 rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 mb-10 text-center max-w-4xl mx-auto shadow-sm transition-all">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white border-[4px] border-amber-200 flex items-center justify-center text-amber-700 shadow-sm">
-              {renderIcon(currentScenario.iconName, 'w-10 h-10')}
+              {aiScenario ? renderIcon('BrainCircuit', 'w-10 h-10') : renderIcon(currentScenario.iconName, 'w-10 h-10')}
             </div>
 
             <h4 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 leading-relaxed mb-8">
-              {scenarioPromptText}
+              {aiScenario ? aiScenario.scenario : scenarioPromptText}
             </h4>
 
             <div className="flex justify-center">
               <ReadAloudButton
                 id="btn-speak-situation-prompt"
-                text={scenarioPromptText}
+                text={aiScenario ? aiScenario.scenario : scenarioPromptText}
                 language={language}
                 variant="pill"
                 size="lg"
@@ -669,27 +868,93 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
           </div>
 
           {/* Feedback alert if selected */}
-          {scenarioFeedback && (
+          {(scenarioFeedback || aiScenarioFeedback) && (
             <div
               className={`mb-6 p-4 sm:p-5 rounded-2xl text-center font-black text-lg sm:text-xl flex items-center justify-center gap-3 border-3 shadow-xl ${
-                selectedScenarioChoice &&
-                (selectedScenarioChoice === 'A' ? currentScenario.optionA.isCorrect : currentScenario.optionB.isCorrect)
+                (selectedScenarioChoice && (selectedScenarioChoice === 'A' ? currentScenario.optionA.isCorrect : currentScenario.optionB.isCorrect)) ||
+                (selectedAiChoiceIndex !== null && selectedAiChoiceIndex === aiScenario?.correctIndex)
                   ? 'bg-emerald-100 text-emerald-950 border-emerald-500 animate-pop-in'
                   : 'bg-amber-100 text-amber-950 border-amber-500 animate-encourage-wobble'
               }`}
             >
-              {selectedScenarioChoice &&
-              (selectedScenarioChoice === 'A' ? currentScenario.optionA.isCorrect : currentScenario.optionB.isCorrect) ? (
+              {(selectedScenarioChoice && (selectedScenarioChoice === 'A' ? currentScenario.optionA.isCorrect : currentScenario.optionB.isCorrect)) ||
+              (selectedAiChoiceIndex !== null && selectedAiChoiceIndex === aiScenario?.correctIndex) ? (
                 <Sparkles className="w-7 h-7 text-emerald-700 shrink-0 animate-bounce" />
               ) : (
                 <HelpCircle className="w-7 h-7 text-amber-700 shrink-0 animate-bounce" />
               )}
-              <span>{scenarioFeedback}</span>
+              <span>{aiScenarioFeedback || scenarioFeedback}</span>
             </div>
           )}
 
-          {/* Two Action Choice Buttons — NEUTRAL before any click */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-7 max-w-3xl mx-auto mb-8">
+          {/* AI Dynamic Action Choice Buttons */}
+          {aiScenario && !isGeneratingScenario && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-7 max-w-4xl mx-auto mb-8">
+              {aiScenario.options.map((optText, index) => {
+                const isSelected = selectedAiChoiceIndex === index;
+                const isCorrect = index === aiScenario.correctIndex;
+                const hasSelected = selectedAiChoiceIndex !== null;
+
+                return (
+                  <button
+                    key={`ai-opt-${index}`}
+                    onClick={() => handleAiChoiceSituation(index)}
+                    disabled={hasSelected}
+                    className={optionBaseClass}
+                    style={{
+                      ...(hasSelected && isSelected && isCorrect ? { background:'#ecfdf5', borderColor:'#34d399', transform:'scale(1.02)' } : {}),
+                      ...(hasSelected && isSelected && !isCorrect ? { background:'#fef2f2', borderColor:'#f87171', transform:'scale(0.98)', opacity:0.8 } : {}),
+                      ...(hasSelected && !isSelected && isCorrect ? { background:'#ecfdf5', borderColor:'#10b981', borderWidth:'4px', borderStyle:'dashed', opacity:0.9 } : {}),
+                      ...(hasSelected && !isSelected && !isCorrect ? { opacity:0.4, transform:'scale(0.98)', filter:'grayscale(100%)' } : {}),
+                    }}
+                  >
+                    {/* Floating Badges */}
+                    {hasSelected && isSelected && isCorrect && (
+                      <>
+                        <span style={{position:'absolute', top:'-14px', right:'24px', background:'#fbbf24', color:'#0f172a', fontSize:'0.75rem', fontWeight:900, padding:'2px 14px', borderRadius:'9999px', boxShadow:'0 4px 12px rgba(0,0,0,0.2)', border:'2px solid #fff', display:'flex', alignItems:'center', gap:'4px', zIndex:10, animation:'popIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both'}}>
+                          ✨ Correct! ✓
+                        </span>
+                        <div style={{position:'absolute', top:'-28px', left:'50%', transform:'translateX(-50%)', pointerEvents:'none', display:'flex', gap:'8px', fontSize:'1.5rem', zIndex:20, animation:'floatSparkle 1.4s ease-out forwards'}}>
+                          <span>🎉</span><span>✨</span><span>🌟</span>
+                        </div>
+                      </>
+                    )}
+                    {hasSelected && isSelected && !isCorrect && (
+                      <span style={{position:'absolute', top:'-14px', right:'24px', background:'#dc2626', color:'#fff', fontSize:'0.75rem', fontWeight:900, padding:'2px 14px', borderRadius:'9999px', boxShadow:'0 4px 12px rgba(0,0,0,0.2)', border:'2px solid #fff', display:'flex', alignItems:'center', gap:'4px', zIndex:10, animation:'popIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both'}}>
+                        ⚠️ Check Safer Choice ✗
+                      </span>
+                    )}
+                    {hasSelected && !isSelected && isCorrect && (
+                      <span style={{position:'absolute', top:'-14px', right:'24px', background:'#16a34a', color:'#fff', fontSize:'0.75rem', fontWeight:900, padding:'2px 14px', borderRadius:'9999px', boxShadow:'0 4px 12px rgba(0,0,0,0.2)', border:'2px solid #fff', display:'flex', alignItems:'center', gap:'4px', zIndex:10, animation:'popIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both'}}>
+                        ✓ Recommended Safe Choice ✨
+                      </span>
+                    )}
+
+                    <div
+                      style={{
+                        width:'48px', height:'48px', borderRadius:'12px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, border:'1px solid',
+                        ...(hasSelected && isSelected && isCorrect ? { background:'#fff', color:'#065f46', borderColor:'#6ee7b7' } : {}),
+                        ...(hasSelected && isSelected && !isCorrect ? { background:'#fff', color:'#b91c1c', borderColor:'#fca5a5' } : {}),
+                        ...(!hasSelected || !isSelected ? { background:'#fef3c7', color:'#92400e', borderColor:'#fcd34d' } : {}),
+                      }}
+                    >
+                      {hasSelected && isSelected && isCorrect && <span style={{fontSize:'1.25rem', fontWeight:900}}>✓</span>}
+                      {hasSelected && isSelected && !isCorrect && <span style={{fontSize:'1.25rem', fontWeight:900}}>✗</span>}
+                      {hasSelected && !isSelected && isCorrect && !isSelected && <span style={{fontSize:'1.25rem', fontWeight:900}}>✓</span>}
+                    </div>
+
+                    <div className="flex-1 text-left">
+                      <span className="text-xl sm:text-2xl font-bold leading-snug block mb-2">{optText}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Hardcoded Action Choice Buttons (Fallback) */}
+          {!aiScenario && !isGeneratingScenario && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-7 max-w-3xl mx-auto mb-8">
             {/* OPTION A */}
             <button
               key={`opt-a-${scenarioIndex}-${selectedScenarioChoice ?? 'none'}`}
@@ -792,6 +1057,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
               </span>
             </button>
           </div>
+          )}
 
           {/* Next Scenario Button */}
           <div className="text-center">

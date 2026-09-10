@@ -20,6 +20,8 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
 
 export function useWanderGuard() {
   const lastSOSSentAt = useRef<number>(0);
+  const lastPredictionCheck = useRef<number>(0);
+  const recentLocations = useRef<Array<{lat: number, lng: number, timestamp: number}>>([]);
   const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
   useEffect(() => {
@@ -40,11 +42,17 @@ export function useWanderGuard() {
               async (position) => {
                 const currentLat = position.coords.latitude;
                 const currentLng = position.coords.longitude;
+                const now = Date.now();
                 
+                recentLocations.current.push({ lat: currentLat, lng: currentLng, timestamp: now });
+                if (recentLocations.current.length > 10) {
+                  recentLocations.current.shift();
+                }
+
                 const distance = calculateDistanceMeters(homeLat, homeLng, currentLat, currentLng);
                 
+                // 1. Hard Boundary Check (> 100m)
                 if (distance > 100) {
-                  const now = Date.now();
                   if (now - lastSOSSentAt.current > COOLDOWN_MS) {
                     lastSOSSentAt.current = now;
                     
@@ -58,6 +66,32 @@ export function useWanderGuard() {
                     } catch (err) {
                       console.error('Failed to send SOS', err);
                     }
+                  }
+                } 
+                // 2. Predictive AI Check (every 30 seconds if enough data)
+                else if (now - lastPredictionCheck.current > 30000 && recentLocations.current.length >= 3) {
+                  lastPredictionCheck.current = now;
+                  try {
+                    const pRes = await fetch(`${OTP_SERVER_URL}/api/wander-guard/predict`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ recentLocations: recentLocations.current })
+                    });
+                    const pData = await pRes.json();
+                    
+                    if (pData.success && pData.prediction?.isWandering && pData.prediction?.riskScore > 70) {
+                      if (now - lastSOSSentAt.current > COOLDOWN_MS) {
+                        lastSOSSentAt.current = now;
+                        await fetch(`${OTP_SERVER_URL}/api/wander-guard/sos`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ currentLat, currentLng, timestamp: now })
+                        });
+                        console.log('🚨 Predictive AI Early Warning triggered!', pData.prediction.reason);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Predictive AI check failed', err);
                   }
                 }
               },

@@ -27,6 +27,7 @@ import {
   FileText,
   ChevronRight,
   Shield,
+  MapPin,
 } from 'lucide-react';
 import { playPositiveChime } from './speech';
 import { CaregiverPatientProfileForm } from './CaregiverPatientProfileForm';
