@@ -10,7 +10,7 @@
  */
 
 import express from 'express';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { generateOtpEmail } from './emailTemplate.js';
@@ -34,14 +34,8 @@ app.use((req, res, next) => {
 // ── In-memory OTP store: { email → { otp, expiresAt } } ─────────────────────
 const otpStore = new Map();
 
-// ── Nodemailer Client ────────────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_APP_PASSWORD,
-  },
-});
+// ── Resend Client ────────────────────────────────────────────────────────
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Helper: generate a 6-digit OTP ──────────────────────────────────────────
 function generateOtp() {
@@ -64,18 +58,23 @@ app.post('/api/send-otp', async (req, res) => {
   otpStore.set(emailLower, { otp, expiresAt });
 
   try {
-    const info = await transporter.sendMail({
-      from: `"Project O.C.T.A.V.E." <${process.env.SMTP_EMAIL}>`,
+    const data = await resend.emails.send({
+      from: `Project O.C.T.A.V.E. <onboarding@resend.dev>`, // Resend requires a verified domain or onboarding@resend.dev for testing
       to: emailLower,
       subject: `Project O.C.T.A.V.E. login code: ${otp}`,
       html: generateOtpEmail(name, otp, emailLower),
       text: `Hello ${name},\n\nYour Project O.C.T.A.V.E. verification code is: ${otp}\n\nThis code expires in 5 minutes.\n\nIf you did not request this, please ignore this email.\n\n— Project O.C.T.A.V.E. Security`,
     });
 
-    console.log(`📧 OTP sent via Nodemailer to ${emailLower} (OTP: ${otp})`, info.messageId);
+    if (data.error) {
+      console.error('❌ Failed to send OTP email via Resend:', data.error);
+      return res.status(500).json({ success: false, message: 'Failed to send email. Please try again.' });
+    }
+
+    console.log(`📧 OTP sent via Resend to ${emailLower} (OTP: ${otp})`, data.data?.id);
     return res.json({ success: true, message: 'OTP sent successfully.' });
   } catch (err) {
-    console.error('❌ Failed to send OTP email via Nodemailer:', err.message);
+    console.error('❌ Failed to send OTP email via Resend:', err.message);
     return res.status(500).json({ success: false, message: 'Failed to send email. Please try again.' });
   }
 });
@@ -205,14 +204,20 @@ app.post('/api/wander-guard/sos', async (req, res) => {
   console.log(`🚨 URGENT: Patient wandered outside safe zone! [${currentLat}, ${currentLng}]`);
 
   try {
-    const info = await transporter.sendMail({
-      from: `"Project O.C.T.A.V.E. Safety" <${process.env.SMTP_EMAIL}>`,
+    const data = await resend.emails.send({
+      from: `Project O.C.T.A.V.E. Safety <onboarding@resend.dev>`,
       to: "arshchavda13@gmail.com", // Send to Caregiver's actual email
       subject: `URGENT: Wander Alert`,
       text: `URGENT: Patient has wandered outside the 100-meter safe zone. Last known coordinates: ${currentLat}, ${currentLng}`,
       html: `<h2>🚨 URGENT: Wander Alert</h2><p>Patient has wandered outside the 100-meter safe zone.</p><p><strong>Last known coordinates:</strong> <a href="https://maps.google.com/?q=${currentLat},${currentLng}">${currentLat}, ${currentLng}</a></p><p>Time: ${new Date(timestamp || Date.now()).toLocaleString()}</p>`
     });
-    console.log(`📧 SOS Email sent successfully (ID: ${info.messageId})`);
+
+    if (data.error) {
+      console.error('❌ Failed to send SOS email via Resend:', data.error);
+      return res.status(500).json({ success: false, message: 'Failed to send SOS email.' });
+    }
+
+    console.log(`📧 SOS Email sent successfully via Resend (ID: ${data.data?.id})`);
     return res.json({ success: true, message: 'SOS email sent.' });
   } catch (error) {
     console.error('❌ Failed to send SOS email:', error.message);
