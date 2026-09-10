@@ -40,7 +40,7 @@ export const VoiceControlLayer: React.FC = () => {
     stateRef.current = state;
   }, [state]);
 
-  const processTranscript = useCallback(async (text: string) => {
+  const processTranscript = useCallback(async (text: string, detectedLanguage: string = 'en') => {
     setState('processing');
     
     // Simulate slight processing delay for feedback UX
@@ -49,7 +49,7 @@ export const VoiceControlLayer: React.FC = () => {
     const lowerText = text.toLowerCase().trim();
     let handled = false;
 
-    console.log("[VoiceControl] Processing transcript:", lowerText);
+    console.log("[VoiceControl] Processing transcript:", lowerText, "Language:", detectedLanguage);
 
     // Navigation Intents
     if (lowerText.match(/photo|family|recognition|first tab/)) {
@@ -62,17 +62,17 @@ export const VoiceControlLayer: React.FC = () => {
       dispatchVoiceIntent({ type: 'NAVIGATE_MODULE', value: 'grid_match' });
       handled = true;
     } 
-    // Quiz Intents
-    else if (lowerText.match(/\b(yes|yeah|yep|correct|true)\b/)) {
+    // Quiz Intents (Includes Left/Right directional commands per Req 2)
+    else if (lowerText.match(/\b(yes|yeah|yep|correct|true|haan|han|ji|haa|hoy|hoi|ho)\b/)) {
       dispatchVoiceIntent({ type: 'ANSWER_QUIZ', value: 'YES' });
       handled = true;
-    } else if (lowerText.match(/\b(no|nope|incorrect|false)\b/)) {
+    } else if (lowerText.match(/\b(no|nope|incorrect|false|nahi|nahin|na|nohoi|nate|hoina)\b/)) {
       dispatchVoiceIntent({ type: 'ANSWER_QUIZ', value: 'NO' });
       handled = true;
-    } else if (lowerText.match(/\b(option a|first|one|a)\b/)) {
+    } else if (lowerText.match(/\b(option a|first|one|a|left|baayein|baam|baawfal)\b/)) {
       dispatchVoiceIntent({ type: 'ANSWER_QUIZ', value: 'OPTION_A' });
       handled = true;
-    } else if (lowerText.match(/\b(option b|second|two|b)\b/)) {
+    } else if (lowerText.match(/\b(option b|second|two|b|right|daayein|daan|sofal)\b/)) {
       dispatchVoiceIntent({ type: 'ANSWER_QUIZ', value: 'OPTION_B' });
       handled = true;
     }
@@ -95,7 +95,23 @@ export const VoiceControlLayer: React.FC = () => {
     } else {
       setState('error');
       setFeedbackMessage("I didn't understand that—please try again.");
-      speakText("I didn't quite catch that. Could you please repeat?", 'en');
+      
+      // Dynamic auto-reply in the correct language
+      const fallbackResponses: Record<string, string> = {
+        'hi': "मुझे समझ नहीं आया। क्या आप दोहरा सकते हैं?",
+        'bn': "আমি বুঝতে পারিনি। আপনি কি আবার বলতে পারেন?",
+        'ne': "मैले बुझिनँ। के तपाईं फेरि भन्न सक्नुहुन्छ?",
+        'as': "মই বুজি পোৱা নাই। আপুনি আকৌ ক'ব পাৰিবনে?",
+        'mni': "ঐ খংদে। অমুক হঞ্জিনবা য়াব্রা?",
+        'en': "I didn't quite catch that. Could you please repeat?"
+      };
+      
+      const replyLangBase = detectedLanguage.split('-')[0].toLowerCase();
+      const responseText = fallbackResponses[replyLangBase] || fallbackResponses['en'];
+      
+      // Make sure downstream TTS has access to detected language
+      speakText(responseText, detectedLanguage as any);
+      
       setTimeout(() => {
         if (stateRef.current !== 'listening') {
           setState('idle');
@@ -140,7 +156,7 @@ export const VoiceControlLayer: React.FC = () => {
       
       if (finalTranscript) {
         console.log("[VoiceControl] Final result:", finalTranscript);
-        processTranscript(finalTranscript);
+        processTranscript(finalTranscript, recognition.lang);
       }
     };
 
@@ -183,6 +199,11 @@ export const VoiceControlLayer: React.FC = () => {
       formData.append('file', audioBlob, 'audio.webm');
       formData.append('model', 'saaras:v1');
       
+      // Req 1: Configure Sarvam to accept/detect multiple languages 
+      // (English, Hindi, Assamese, Manipuri, Nepali, Bengali)
+      // Usually, 'unknown' or omitting the language code enables language detection in Sarvam
+      formData.append('language_code', 'unknown');
+      
       const sarvamUrl = (import.meta as any).env?.VITE_SARVAM_STT_URL || 'https://api.sarvam.ai/speech-to-text-translate';
       const sarvamKey = (import.meta as any).env?.VITE_SARVAM_API_KEY;
 
@@ -190,7 +211,7 @@ export const VoiceControlLayer: React.FC = () => {
         console.warn("No STT API key provided. Faking response.");
         await new Promise(r => setTimeout(r, 1000));
         setTranscript("read the question"); // Faking a successful read command
-        processTranscript("read the question");
+        processTranscript("read the question", "en-IN");
         return;
       }
 
@@ -203,8 +224,11 @@ export const VoiceControlLayer: React.FC = () => {
       if (!res.ok) throw new Error("STT API failed");
       const data = await res.json();
       const finalText = data.transcript || '';
+      // Extract detected language (or equivalent metadata)
+      const detectedLang = data.language_code || data.detected_language || 'en-IN';
+      
       setTranscript(finalText);
-      processTranscript(finalText);
+      processTranscript(finalText, detectedLang);
 
     } catch (err: any) {
       console.error(err);

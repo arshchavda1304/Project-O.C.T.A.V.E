@@ -321,13 +321,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   Enter your name and Gmail address. We will instantly email you a 6-digit authentication code.
                 </p>
 
-                <form onSubmit={handleSendOtp} className="space-y-6">
+                <form onSubmit={handleSendOtp} className="space-y-6" autoComplete="off">
                   <div>
                     <label className="block text-sm font-bold text-slate-800 mb-2">Full Name</label>
                     <div className="relative">
                       <User className="w-5 h-5 text-slate-500 absolute left-4 top-3.5" />
                       <input
                         type="text"
+                        name="user_full_name_no_autofill"
+                        autoComplete="off"
+                        data-1p-ignore
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -342,6 +345,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       <Mail className="w-5 h-5 text-slate-500 absolute left-4 top-3.5" />
                       <input
                         type="email"
+                        name="user_email_address_no_autofill"
+                        autoComplete="off"
+                        data-1p-ignore
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}

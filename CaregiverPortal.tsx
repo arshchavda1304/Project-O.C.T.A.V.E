@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { playPositiveChime } from './speech';
 import { CaregiverPatientProfileForm } from './CaregiverPatientProfileForm';
+import { PatientFaceManager } from './PatientFaceManager';
 
 interface CaregiverPortalProps {
   language: Language;
@@ -71,7 +72,7 @@ export const CaregiverPortal: React.FC<CaregiverPortalProps> = ({
   const t = translations[language];
 
   // Active sub-tab in Caregiver Portal
-  const [activeTab, setActiveTab] = useState<'profile' | 'routine' | 'photos' | 'notes'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'routine' | 'photos' | 'notes' | 'security' | 'wanderguard'>('profile');
 
   // Photo Uploader state
   const [photoName, setPhotoName] = useState('');
@@ -83,6 +84,9 @@ export const CaregiverPortal: React.FC<CaregiverPortalProps> = ({
   // Caregiver Note State
   const [newNoteText, setNewNoteText] = useState('');
   const [noteCategory, setNoteCategory] = useState<CaregiverNote['category']>('Mood');
+
+  // Wander Guard State
+  const [wanderGuardStatus, setWanderGuardStatus] = useState<string | null>(null);
 
   // Checklist Calculations
   const completedCount = checklist.filter((item) => item.completed).length;
@@ -143,6 +147,43 @@ export const CaregiverPortal: React.FC<CaregiverPortalProps> = ({
     onAddCaregiverNote(newNoteText.trim(), noteCategory);
     playPositiveChime();
     setNewNoteText('');
+  };
+
+  const handleSetHomeBase = () => {
+    if (!navigator.geolocation) {
+      setWanderGuardStatus('Geolocation is not supported by your browser.');
+      return;
+    }
+    
+    setWanderGuardStatus('Fetching current location...');
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const OTP_SERVER_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OTP_SERVER_URL || 'http://127.0.0.1:4001';
+          const res = await fetch(`${OTP_SERVER_URL}/api/wander-guard/home`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: latitude, lng: longitude }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            setWanderGuardStatus('Home base successfully updated!');
+            playPositiveChime();
+            setTimeout(() => setWanderGuardStatus(null), 4000);
+          } else {
+            setWanderGuardStatus('Failed to update home base.');
+          }
+        } catch (err) {
+          console.error(err);
+          setWanderGuardStatus('Network error while updating home base.');
+        }
+      },
+      (error) => {
+        console.error(error);
+        setWanderGuardStatus('Error fetching location. Please ensure location permissions are granted.');
+      }
+    );
   };
 
   return (
@@ -252,18 +293,88 @@ export const CaregiverPortal: React.FC<CaregiverPortalProps> = ({
           <FileText className="w-5 h-5 stroke-[2.5]" />
           <span>{t.tabCaregiverLog}</span>
         </button>
+
+        <button
+          id="tab-btn-security"
+          onClick={() => setActiveTab('security')}
+          className={`px-5 py-3 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'security'
+              ? 'bg-emerald-600 text-slate-950 shadow-md ring-2 ring-emerald-300'
+              : 'text-slate-800 hover:bg-emerald-100'
+          }`}
+        >
+          <Shield className="w-5 h-5 stroke-[2.5]" />
+          <span>Face Security Management</span>
+        </button>
+
+        <button
+          id="tab-btn-wanderguard"
+          onClick={() => setActiveTab('wanderguard')}
+          className={`px-5 py-3 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'wanderguard'
+              ? 'bg-rose-600 text-slate-50 shadow-md ring-2 ring-rose-300'
+              : 'text-slate-800 hover:bg-rose-100'
+          }`}
+        >
+          <MapPin className="w-5 h-5 stroke-[2.5]" />
+          <span>Wander Guard (Geofencing)</span>
+        </button>
       </div>
 
       {/* TAB CONTENT 1: PATIENT SETUP & PROFILE FORM */}
       {activeTab === 'profile' && (
-        <CaregiverPatientProfileForm
-          language={language}
-          patient={patient}
-          caregiver={caregiver}
-          allCaregivers={allCaregivers}
-          allDoctors={allDoctors}
-          onSavePatient={onSavePatient}
-        />
+        <div className="space-y-8">
+          <CaregiverPatientProfileForm
+            language={language}
+            patient={patient}
+            caregiver={caregiver}
+            allCaregivers={allCaregivers}
+            allDoctors={allDoctors}
+            onSavePatient={onSavePatient}
+          />
+        </div>
+      )}
+
+      {/* TAB CONTENT 5: FACE SECURITY MANAGEMENT */}
+      {activeTab === 'security' && (
+        <div className="space-y-8 animate-fade-in">
+          <PatientFaceManager />
+        </div>
+      )}
+
+      {/* TAB CONTENT 6: WANDER GUARD SETTINGS */}
+      {activeTab === 'wanderguard' && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border-4 border-rose-500 shadow-xl">
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-950 flex items-center gap-3 mb-2">
+              <MapPin className="w-8 h-8 text-rose-600 stroke-[2.5]" />
+              <span>Wander Guard Settings</span>
+            </h3>
+            <p className="text-lg text-slate-700 font-medium mb-6">
+              Set the current location as the safe home base. If the patient wanders more than 100 meters from this location, an emergency SOS email will be sent immediately.
+            </p>
+
+            <button
+              onClick={handleSetHomeBase}
+              className="py-4 px-8 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-lg sm:text-xl shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer border-2 border-rose-400 active:scale-95 transition-all"
+            >
+              <MapPin className="w-6 h-6" />
+              <span>Set Current Location as Home Base</span>
+            </button>
+
+            {wanderGuardStatus && (
+              <div className={`mt-4 p-4 rounded-xl font-bold text-lg inline-block border-2 ${
+                wanderGuardStatus.includes('success') 
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : wanderGuardStatus.includes('Fetching')
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : 'bg-red-100 text-red-800 border-red-300'
+              }`}>
+                {wanderGuardStatus}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* TAB CONTENT 2: DAILY ROUTINE CHECKLIST */}

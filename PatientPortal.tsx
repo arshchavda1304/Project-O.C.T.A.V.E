@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { speakText, playPositiveChime, playEncourageChime } from './speech';
 import { ReadAloudButton } from './ReadAloudButton';
+import { useWanderGuard } from './useWanderGuard';
 
 interface PatientPortalProps {
   language: Language;
@@ -43,6 +44,8 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
   patient,
   onGameActivityCompleted,
 }) => {
+  useWanderGuard();
+
   const t = translations[language];
   const [activeModule, setActiveModule] = useState<PatientModuleType>('photo_quiz');
 
@@ -370,116 +373,141 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 animate-fade-in">
-      {/* Module Selection Navigation Bar */}
-      <div className="bg-white rounded-3xl p-4 sm:p-5 border-3 border-emerald-700/30 shadow-md mb-8">
-        <div className="text-center mb-4">
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-            {t.patientPortalHeader}
-          </h2>
-          <p className="text-base sm:text-lg text-slate-700 font-medium">
-            {t.patientPortalSubheader}
-          </p>
+      {/* Today's Plan Widget */}
+      <div className="bg-white rounded-[3rem] p-6 sm:p-8 border-[4px] border-amber-100 shadow-sm mb-8">
+        <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900">
+              {new Date().getHours() < 12 ? '☀️ Good Morning' : new Date().getHours() < 17 ? '🌤️ Good Afternoon' : '🌙 Good Evening'}
+            </h2>
+            <p className="text-xl text-slate-600 mt-2 font-medium">Today is {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <button 
+              onClick={async () => {
+                const OTP_SERVER_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OTP_SERVER_URL || 'http://127.0.0.1:4001';
+                try {
+                  await fetch(`${OTP_SERVER_URL}/api/wander-guard/sos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentLat: 0, currentLng: 0, timestamp: Date.now() })
+                  });
+                  alert('Demo SOS Email Sent Successfully!');
+                } catch (err) {
+                  alert('Failed to send Demo SOS');
+                }
+              }}
+              className="mt-4 px-4 py-2 bg-red-100 text-red-700 font-bold rounded-xl border-2 border-red-200 text-sm hover:bg-red-200 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Simulate Wander SOS (Demo)
+            </button>
+          </div>
+          <div className="mt-4 sm:mt-0 px-6 py-3 bg-blue-50 text-blue-900 rounded-full border-[3px] border-blue-200 font-bold text-xl flex items-center gap-2">
+            <Sun className="w-6 h-6" />
+            Today's Plan
+          </div>
         </div>
+        
+        <div className="max-h-80 overflow-y-auto pr-2 space-y-4">
+          {[
+            { time: "09:00 AM", task: "Daily Health Check 💊", completed: true },
+            { time: "11:30 AM", task: "Hydration Break 💧", completed: false },
+            { time: "01:00 PM", task: "Lunch Time 🍲", completed: false },
+            { time: "03:30 PM", task: "Family Time 📞", completed: false },
+            { time: "06:00 PM", task: "Evening Walk 🚶", completed: false },
+          ].map((reminder, idx) => (
+            <div key={idx} className={`p-5 rounded-2xl flex items-center justify-between border-[3px] ${reminder.completed ? 'bg-emerald-50 border-emerald-200 opacity-75' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-center gap-4">
+                <div className={`px-4 py-2 rounded-xl font-bold text-lg ${reminder.completed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {reminder.time}
+                </div>
+                <span className={`text-xl sm:text-2xl font-semibold ${reminder.completed ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                  {reminder.task}
+                </span>
+              </div>
+              {reminder.completed && <CheckCircle2 className="w-8 h-8 text-emerald-500 shrink-0" />}
+            </div>
+          ))}
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Module Selection Navigation Bar */}
+      <div className="bg-white rounded-[3rem] p-6 sm:p-8 border-[4px] border-amber-100 shadow-sm mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <button
             type="button"
             id="btn-module-photo-quiz"
             onClick={() => setActiveModule('photo_quiz')}
-            className={`py-3.5 px-4 rounded-2xl font-black text-base sm:text-lg flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border-3 ${
+            className={`py-6 px-6 rounded-[2rem] font-semibold text-2xl flex flex-col items-center justify-center gap-3 transition-all cursor-pointer border-[4px] ${
               activeModule === 'photo_quiz'
-                ? 'bg-[#15803D] text-white border-[#14532D] shadow-md ring-4 ring-emerald-200'
-                : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:bg-emerald-100'
+                ? 'bg-rose-100 text-rose-900 border-rose-300 shadow-sm'
+                : 'bg-white text-slate-700 border-slate-100 hover:bg-slate-50'
             }`}
           >
-            <span className="flex items-center gap-2">
-              <Heart className="w-5 h-5 stroke-[2.5]" />
-              {t.modulePhotoQuiz}
-            </span>
-            <span className="text-xs font-semibold opacity-90">
-              Family Recognition
-            </span>
+            <Heart className="w-10 h-10 stroke-[2.5]" />
+            <span className="text-center">Look at family photos</span>
           </button>
 
           <button
             type="button"
             id="btn-module-situation-test"
             onClick={() => setActiveModule('situation_test')}
-            className={`py-3.5 px-4 rounded-2xl font-black text-base sm:text-lg flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border-3 ${
+            className={`py-6 px-6 rounded-[2rem] font-semibold text-2xl flex flex-col items-center justify-center gap-3 transition-all cursor-pointer border-[4px] ${
               activeModule === 'situation_test'
-                ? 'bg-[#15803D] text-white border-[#14532D] shadow-md ring-4 ring-emerald-200'
-                : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:bg-emerald-100'
+                ? 'bg-blue-100 text-blue-900 border-blue-300 shadow-sm'
+                : 'bg-white text-slate-700 border-slate-100 hover:bg-slate-50'
             }`}
           >
-            <span className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 stroke-[2.5]" />
-              {t.moduleSituationTest}
-            </span>
-            <span className="text-xs font-semibold opacity-90">
-              {t.moduleSubRegionalSafety || 'Regional Safety & Reaction'}
-            </span>
+            <ShieldAlert className="w-10 h-10 stroke-[2.5]" />
+            <span className="text-center">Practice home safety</span>
           </button>
 
           <button
             type="button"
             id="btn-module-grid-match"
             onClick={() => setActiveModule('grid_match')}
-            className={`py-3.5 px-4 rounded-2xl font-black text-base sm:text-lg flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border-3 ${
+            className={`py-6 px-6 rounded-[2rem] font-semibold text-2xl flex flex-col items-center justify-center gap-3 transition-all cursor-pointer border-[4px] ${
               activeModule === 'grid_match'
-                ? 'bg-[#15803D] text-white border-[#14532D] shadow-md ring-4 ring-emerald-200'
-                : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:bg-emerald-100'
+                ? 'bg-emerald-100 text-emerald-900 border-emerald-300 shadow-sm'
+                : 'bg-white text-slate-700 border-slate-100 hover:bg-slate-50'
             }`}
           >
-            <span className="flex items-center gap-2">
-              <Award className="w-5 h-5 stroke-[2.5]" />
-              {t.moduleGridMatch}
-            </span>
-            <span className="text-xs font-semibold opacity-90">
-              {t.moduleSubHeritageMatch || 'Heritage Symbol Match'}
-            </span>
+            <Award className="w-10 h-10 stroke-[2.5]" />
+            <span className="text-center">Play a matching game</span>
           </button>
         </div>
       </div>
 
       {/* MODULE 1: Family Photo Quiz */}
       {activeModule === 'photo_quiz' && (
-        <div id="section-photo-quiz" className="bg-white rounded-3xl p-6 sm:p-10 border-4 border-emerald-600 shadow-xl text-center">
+        <div id="section-photo-quiz" className="bg-white rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 shadow-sm text-center">
           {currentPhoto ? (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-6 border-b-2 border-slate-100">
                 <div>
-                  <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-bold text-sm mb-1">
-                    {t.photoQuizTitle}
+                  <span className="inline-block px-6 py-2 rounded-full bg-rose-100 text-rose-900 font-semibold text-xl mb-2">
+                    Family Photos
                   </span>
-                  <p className="text-sm sm:text-base font-bold text-slate-600">
-                    {t.photoCountLabel || 'Photo'} {photoIndex + 1} / {familyPhotos.length}
-                  </p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-2xl border-2 border-emerald-300">
-                  <Sparkles className="w-5 h-5 text-emerald-700" />
-                  <span className="font-black text-emerald-950 text-base">
+                <div className="flex items-center gap-3 bg-amber-50 px-6 py-3 rounded-full border-[3px] border-amber-200">
+                  <Sparkles className="w-6 h-6 text-amber-600" />
+                  <span className="font-semibold text-amber-900 text-xl">
                     {recognizedCount} {t.recognizedTodayLabel || 'Recognized Today'}
                   </span>
                 </div>
               </div>
 
-              <div className="relative inline-block mb-8">
+              <div className="relative inline-block mb-10">
                 <img
                   src={currentPhoto.imageUrl}
                   alt={currentPhoto.name}
-                  className="w-72 h-72 sm:w-96 sm:h-96 object-cover rounded-3xl border-4 border-emerald-700 shadow-2xl mx-auto"
+                  className="w-80 h-80 sm:w-[28rem] sm:h-[28rem] object-cover rounded-[3rem] border-[6px] border-white shadow-lg mx-auto"
                 />
-                {currentPhoto.isCustomUpload && (
-                  <span className="absolute bottom-4 left-4 bg-amber-400 text-slate-950 font-black px-3 py-1 rounded-full text-xs shadow-md">
-                    {t.addedByCaregiver || 'Added by Caregiver'}
-                  </span>
-                )}
               </div>
 
-              <div className="max-w-2xl mx-auto mb-8 bg-[#FAF7F0] p-6 rounded-3xl border-3 border-emerald-300 shadow-sm">
-                <div className="flex items-center justify-center gap-4">
-                  <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-950 leading-relaxed">
+              <div className="max-w-3xl mx-auto mb-10 bg-amber-50 p-8 rounded-[3rem] border-[4px] border-amber-100 shadow-sm">
+                <div className="flex items-center justify-center gap-6">
+                  <h3 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 leading-relaxed">
                     {currentPhotoPrompt}
                   </h3>
                   <ReadAloudButton
@@ -503,20 +531,20 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                   type="button"
                   id="btn-quiz-yes"
                   onClick={() => handleAnswerPhotoQuiz(true)}
-                  className="py-6 px-8 rounded-3xl bg-[#15803D] hover:bg-[#166534] active:bg-[#14532D] text-white font-black text-2xl sm:text-3xl shadow-xl hover:shadow-2xl transition-all duration-150 border-4 border-emerald-300 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
+                  className="py-8 px-8 rounded-[3rem] bg-green-100 hover:bg-green-200 active:bg-green-300 text-green-900 font-semibold text-3xl sm:text-4xl shadow-sm border-[4px] border-green-200 active:scale-95 flex items-center justify-center gap-4 cursor-pointer transition-all"
                 >
-                  <CheckCircle2 className="w-9 h-9 stroke-[3]" />
-                  <span>{t.btnYes}</span>
+                  <CheckCircle2 className="w-12 h-12" />
+                  <span>Yes, that's right</span>
                 </button>
 
                 <button
                   type="button"
                   id="btn-quiz-no"
                   onClick={() => handleAnswerPhotoQuiz(false)}
-                  className="py-6 px-8 rounded-3xl bg-[#B91C1C] hover:bg-[#991B1B] active:bg-[#7F1D1D] text-white font-black text-2xl sm:text-3xl shadow-xl hover:shadow-2xl transition-all duration-150 border-4 border-red-300 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
+                  className="py-8 px-8 rounded-[3rem] bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-semibold text-3xl sm:text-4xl shadow-sm border-[4px] border-slate-200 active:scale-95 flex items-center justify-center gap-4 cursor-pointer transition-all"
                 >
-                  <HelpCircle className="w-9 h-9 stroke-[3]" />
-                  <span>{t.btnNo}</span>
+                  <HelpCircle className="w-12 h-12" />
+                  <span>I'm not sure</span>
                 </button>
               </div>
 
@@ -528,9 +556,9 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                     playEncourageChime();
                     setPhotoIndex((prev) => (prev + 1) % Math.max(1, familyPhotos.length));
                   }}
-                  className="text-slate-700 hover:text-slate-950 font-bold text-base inline-flex items-center gap-2 underline underline-offset-4 cursor-pointer p-2"
+                  className="text-slate-600 hover:text-slate-900 font-semibold text-2xl inline-flex items-center gap-2 underline underline-offset-8 cursor-pointer p-4 rounded-full hover:bg-slate-50 transition-colors"
                 >
-                  <span>{t.quizNextButton}</span>
+                  <span>Let's try another photo</span>
                 </button>
               </div>
             </>
@@ -548,7 +576,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
 
       {/* MODULE 2: REGION-SPECIFIC QUICK REACTION & SAFETY TEST */}
       {activeModule === 'situation_test' && (
-        <div id="section-situation-test" className="bg-white rounded-3xl p-6 sm:p-10 border-4 border-emerald-600 shadow-xl relative overflow-hidden">
+        <div id="section-situation-test" className="bg-white rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 shadow-sm relative overflow-hidden">
           {/* CELEBRATION CONGRATS OVERLAY ANIMATION */}
           {showCelebration && (
             <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center bg-emerald-950/10 backdrop-blur-[1px] animate-fade-in">
@@ -580,20 +608,17 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
           )}
 
           {/* Test Header with Region Badge */}
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-6 border-b-2 border-slate-100">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-bold text-xs sm:text-sm">
-                  {t.situationTestTitle}
+              <div className="flex items-center gap-3 mb-2">
+                <span className="inline-block px-6 py-2 rounded-full bg-blue-100 text-blue-900 font-semibold text-xl">
+                  Safety Practice
                 </span>
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-950 font-black text-xs border border-amber-300">
-                  <MapPin className="w-3.5 h-3.5 text-amber-700" />
-                  <span>{t.situationRegionLabel || 'Region'}: {selectedRegion}</span>
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 text-amber-900 font-medium text-lg border-[3px] border-amber-100">
+                  <MapPin className="w-5 h-5 text-amber-600" />
+                  <span>{selectedRegion}</span>
                 </span>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-950">
-                {t.situationQuestionLabel || 'Question'} {scenarioIndex + 1} / {regionalScenarios.length}
-              </h3>
             </div>
 
             {/* Region Switcher Pills so patients or caregivers can explore sister states */}
@@ -623,22 +648,22 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
           </div>
 
           {/* Prompt Card */}
-          <div className="bg-[#FAF7F0] rounded-3xl p-6 sm:p-8 border-3 border-amber-300 mb-8 text-center max-w-3xl mx-auto shadow-inner">
-            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-amber-100 border-2 border-amber-400 flex items-center justify-center text-amber-900">
-              {renderIcon(currentScenario.iconName, 'w-9 h-9 stroke-[2.2]')}
+          <div className="bg-amber-50 rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 mb-10 text-center max-w-4xl mx-auto shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white border-[4px] border-amber-200 flex items-center justify-center text-amber-700 shadow-sm">
+              {renderIcon(currentScenario.iconName, 'w-10 h-10')}
             </div>
 
-            <h4 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-950 leading-relaxed">
+            <h4 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 leading-relaxed mb-8">
               {scenarioPromptText}
             </h4>
 
-            <div className="mt-3 flex justify-center">
+            <div className="flex justify-center">
               <ReadAloudButton
                 id="btn-speak-situation-prompt"
                 text={scenarioPromptText}
                 language={language}
                 variant="pill"
-                size="md"
+                size="lg"
               />
             </div>
           </div>
@@ -760,7 +785,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                 {hasSelected && isSelectedB && !isCorrectB && <span style={{fontSize:'1.25rem', fontWeight:900}}>✗</span>}
                 {hasSelected && !isSelectedB && isCorrectB && isSelectedA && !isCorrectA && <span style={{fontSize:'1.25rem', fontWeight:900}}>✓</span>}
                 {(!hasSelected || (hasSelected && !isSelectedB && !(isSelectedA && !isCorrectA && isCorrectB))) &&
-                  renderIcon(currentScenario.optionB.icon, 'w-6 h-6 stroke-[2.5]')}
+                  renderIcon(currentScenario.optionB.icon, 'w-8 h-8 stroke-[2.5]')}
               </div>
               <span className="flex-1 leading-snug">
                 {optionBText}
@@ -774,10 +799,9 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
               type="button"
               id="btn-next-scenario"
               onClick={handleNextScenario}
-              className="py-3.5 px-8 rounded-2xl bg-[#15803D] hover:bg-[#166534] text-white font-black text-lg shadow-md flex items-center gap-2 mx-auto cursor-pointer border-2 border-emerald-400 active:scale-95 transition-all"
+              className="text-slate-600 hover:text-slate-900 font-semibold text-2xl inline-flex items-center gap-2 underline underline-offset-8 cursor-pointer p-4 rounded-full hover:bg-slate-50 transition-colors"
             >
-              <span>{t.nextScenarioBtn || 'Next Scenario'}</span>
-              <ArrowRight className="w-5 h-5 stroke-[3]" />
+              <span>Let's try another one</span>
             </button>
           </div>
         </div>
@@ -785,49 +809,49 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
 
       {/* MODULE 3: Grid Match */}
       {activeModule === 'grid_match' && (
-        <div id="section-grid-match" className="bg-white rounded-3xl p-6 sm:p-10 border-4 border-emerald-600 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-200">
+        <div id="section-grid-match" className="bg-white rounded-[3rem] p-8 sm:p-12 border-[4px] border-amber-100 shadow-sm text-center">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-6 border-b-2 border-slate-100">
             <div>
-              <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-bold text-sm mb-1">
-                {t.gridMatchTitle}
+              <span className="inline-block px-6 py-2 rounded-full bg-amber-100 text-amber-900 font-semibold text-xl mb-2">
+                Matching Game
               </span>
-              <div className="flex items-center gap-2">
-                <p className="text-base sm:text-lg text-slate-700 font-medium">
-                  {t.gridMatchInstruction}
+              <div className="flex items-center gap-3">
+                <p className="text-xl sm:text-2xl text-slate-600 font-medium">
+                  Find the two cards that match. Take your time.
                 </p>
                 <ReadAloudButton
                   id="btn-speak-grid-instructions"
-                  text={t.gridMatchInstruction}
+                  text="Find the two cards that match. Take your time."
                   language={language}
                   size="sm"
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 font-black text-sm sm:text-base">
+            <div className="flex items-center gap-4">
+              <div className="px-6 py-3 rounded-full bg-blue-50 border-[3px] border-blue-100 text-blue-900 font-semibold text-xl">
                 {matchedCount} / {initialSymbols.length} Pairs
               </div>
 
               <button
                 type="button"
                 onClick={initGridGame}
-                className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer"
+                className="p-4 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-700 border-[3px] border-slate-200 cursor-pointer"
                 title="Reset Game"
               >
-                <RotateCcw className="w-5 h-5" />
+                <RotateCcw className="w-6 h-6" />
               </button>
             </div>
           </div>
 
           {isGridFinished && (
-            <div className="mb-6 p-6 rounded-3xl bg-emerald-100 border-3 border-emerald-500 text-emerald-950 text-center font-black text-2xl animate-bounce space-y-2">
-              <div className="text-4xl">🌟 🏆 🌿</div>
-              <p>{t.gridCompleteTitle}</p>
+            <div className="mb-10 p-8 rounded-full bg-green-50 border-[3px] border-green-200 text-green-900 text-center font-semibold text-3xl animate-bounce space-y-3">
+              <div className="text-5xl">🌟 🏆 🌿</div>
+              <p>You did it! Beautifully done.</p>
             </div>
           )}
 
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 max-w-2xl mx-auto">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
             {gridDeck.map((card, idx) => {
               const isRevealed = card.flipped || card.matched;
               return (
@@ -836,21 +860,21 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                   key={card.id}
                   onClick={() => handleCardClick(idx)}
                   disabled={isRevealed}
-                  className={`h-24 sm:h-28 rounded-2xl font-black text-2xl sm:text-3xl flex flex-col items-center justify-center transition-all duration-300 border-3 shadow cursor-pointer select-none ${
+                  className={`h-32 sm:h-40 rounded-[2rem] font-semibold text-4xl flex flex-col items-center justify-center transition-all duration-300 border-[4px] shadow-sm cursor-pointer select-none ${
                     isRevealed
                       ? `${card.color} rotate-0`
-                      : 'bg-[#15803D] hover:bg-[#166534] border-[#14532D] text-emerald-200'
+                      : 'bg-amber-100 hover:bg-amber-200 border-amber-200 text-amber-900'
                   }`}
                 >
                   {isRevealed ? (
                     <>
                       <span>{card.icon}</span>
-                      <span className="text-[10px] sm:text-xs font-bold mt-1 line-clamp-1">
+                      <span className="text-lg sm:text-xl font-medium mt-2 line-clamp-1">
                         {card.label}
                       </span>
                     </>
                   ) : (
-                    <span className="text-3xl">🌿</span>
+                    <span className="text-5xl">🌿</span>
                   )}
                 </button>
               );

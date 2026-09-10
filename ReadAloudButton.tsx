@@ -42,7 +42,14 @@ export const ReadAloudButton: React.FC<ReadAloudButtonProps> = ({
   const isLoading = isCurrentText && ttsState.status === 'loading';
 
   const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+    
+    if (!resolvedText || resolvedText.trim() === '') {
+      console.warn("ReadAloud aborted: Text payload is empty.");
+      return; 
+    }
+
     if (isPlaying) {
       ttsManager.pause();
     } else if (isPaused) {
@@ -53,6 +60,7 @@ export const ReadAloudButton: React.FC<ReadAloudButtonProps> = ({
   };
 
   const handleStop = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     ttsManager.stop();
   };
